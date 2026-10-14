@@ -1488,31 +1488,32 @@ void ReadEventChangeAttributesForPlayer(MvMRobotPlayer roboPlayer, KeyValues kv)
 
 static void Parse_AddCond(int client, KeyValues kv)
 {
+	esAddcond addcond;
+	addcond.Initialize();
+	
 	bool got_cond = false;
 	
 	if (!kv.GotoFirstSubKey(false))
 	{
 		if (kv.GetDataType("AddCond") == KvData_Int)
 		{
-			TF2_AddCondition(client, kv.GetNum(NULL_STRING));
+			addcond.cond = kv.GetNum("AddCond");
 			got_cond = true;
 		}
 		else
 		{
-#if 0
-			char sCondName[PLATFORM_MAX_PATH]; kv.GetString(NULL_STRING, sCondName, sizeof(sCondName));
-			TFCond cond = GetTFConditionFromName(sCondName);
+			char sCondName[PLATFORM_MAX_PATH]; kv.GetString("AddCond", sCondName, sizeof(sCondName));
+			TFCond cond = TF2Util_GetConditionFromName(sCondName);
 			
-			if (cond != -1)
+			if (cond >= TFCond_Slowed)
 			{
-				TF2_AddCondition(client, cond);
+				addcond.cond = cond;
 				got_cond = true;
 			}
 			else
 			{
 				LogError("Unrecognized condition name \"%s\" in AddCond block.", sCondName);
 			}
-#endif
 		}
 	}
 	
@@ -1520,14 +1521,38 @@ static void Parse_AddCond(int client, KeyValues kv)
 	
 	if (cond == TF_COND_INVALID)
 	{
-		//TODO: same as above
+		char sCondName[PLATFORM_MAX_PATH]; kv.GetString("Name", sCondName, sizeof(sCondName));
+		cond = TF2Util_GetConditionFromName(sCondName);
+		
+		if (cond >= TFCond_Slowed)
+		{
+			addcond.cond = cond;
+			got_cond = true;
+		}
+		else
+		{
+			LogError("Unrecognized condition name \"%s\" in AddCond block.", sCondName);
+		}
 	}
+	
+	addcond.duration = kv.GetFloat("Duration", addcond.duration);
 	
 	if (!got_cond)
 	{
 		LogError("Could not find a valid condition index/name in AddCond block.");
 		return;
 	}
+	
+	LogMessage("Parse_AddCond: add AddCond(%d, %f)", addcond.cond, addcond.duration);
+	
+	if (addcond.delay == 0.0 && addcond.health_below == 0 && addcond.health_above == 0 && addcond.if_left_spawn == false)
+	{
+		//There's no need to store the data for later in this case since it's a one and done type of deal
+		TF2_AddCondition(client, addcond.cond, addcond.duration);
+		return;
+	}
+	
+	//TODO: we need to figure out how we're gonna handle the rest of the keyvalues...
 }
 
 static void MakePlayerOwnLoadout(int client, eRobotTemplateType type, TFClassType nClass)
